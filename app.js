@@ -78,6 +78,17 @@ const ACTIVITIES = [
         accentShadow: 'rgba(254, 228, 64, 0.15)',
         badgeText: 'Evaluación',
     },
+    {
+        id: 'advanced-php-vuln',
+        title: 'Hacking Web (Avanzado)',
+        description: 'Descubre y explota vulnerabilidades web (SQLi, LFI, Command Injection) utilizando la terminal.',
+        icon: '🕷️',
+        difficulty: 5,
+        accentColor: '#ef233c',
+        accentBg: 'rgba(239, 35, 60, 0.12)',
+        accentShadow: 'rgba(239, 35, 60, 0.15)',
+        badgeText: 'Actividad 7',
+    },
 ];
 
 // ========== EMAIL DATA ==========
@@ -378,6 +389,34 @@ Oct 14 10:22:19 cybershield sshd[1236]: Failed password for admin from 192.168.1
     }
 ];
 
+// ========== ADVANCED VM DATA ==========
+const ADVANCED_VM_SCENARIOS = [
+    {
+        instruction: 'Hay una aplicación PHP vulnerable ejecutándose en el puerto 8080 (http://localhost:8080/). Usa el comando `curl` para interactuar con ella. En la URL hay un parámetro `id`. Envía un comando curl con el parámetro `id=1` para ver al usuario legítimo.',
+        expectedCommand: 'curl http://localhost:8080/?id=1',
+        hint: 'Usa "curl" seguido de la URL completa: http://localhost:8080/?id=1',
+        explanation: '✅ ¡Correcto! Has usado curl para ver la información que la base de datos devuelve de forma normal.'
+    },
+    {
+        instruction: 'El parámetro `id` es vulnerable a Inyección SQL (SQLi). Usa `curl` e inyecta la siguiente carga útil en el parámetro id: `1 OR 1=1` para forzar a la base de datos a devolver todos los usuarios. Nota: Las URLs no pueden contener espacios, debes codificarlos como `%20`. Inyecta: `1%20OR%201=1`.',
+        expectedCommand: 'curl "http://localhost:8080/?id=1%20OR%201=1"',
+        hint: 'Escribe el comando: curl "http://localhost:8080/?id=1%20OR%201=1"',
+        explanation: '✅ ¡Correcto! Al inyectar `1%20OR%201=1`, la consulta en la base de datos siempre es verdadera y devuelve todas las filas, exponiendo información de otros usuarios como "guest" o "admin".'
+    },
+    {
+        instruction: 'La página tiene otra funcionalidad de inclusión de archivos en el parámetro `page`. Intenta leer el archivo secreto del sistema usando un ataque de Local File Inclusion (LFI). Solicita la página: `../../../../../../etc/secret.txt`.',
+        expectedCommand: 'curl http://localhost:8080/?page=../../../../../../etc/secret.txt',
+        hint: 'Usa curl solicitando la URL terminada en ?page=../../../../../../etc/secret.txt',
+        explanation: '✅ ¡Correcto! Has logrado salir del directorio web (Directory Traversal) para leer un archivo sensible del sistema operativo usando un parámetro vulnerable de inclusión.'
+    },
+    {
+        instruction: 'Finalmente, hay una utilidad de ping vulnerable que no filtra las entradas. Aprovechando que se envía por POST, ejecuta el comando `id` del sistema inyectándolo después del ping de esta forma: `127.0.0.1; id`.',
+        expectedCommand: 'curl -d "ip=127.0.0.1; id" http://localhost:8080/',
+        hint: 'Usa la bandera -d para datos POST: curl -d "ip=127.0.0.1; id" http://localhost:8080/',
+        explanation: '✅ ¡Correcto! Al usar el punto y coma (;) has concatenado un nuevo comando del sistema (Command Injection), lo que permite ejecutar código directamente en el servidor. Has completado el módulo de hacking web avanzado.'
+    }
+];
+
 // ========== QUIZ DATA ==========
 const QUIZ_QUESTIONS = [
     {
@@ -444,6 +483,18 @@ const QUIZ_QUESTIONS = [
 
 // ========== STATE ==========
 let completedActivities = new Set();
+try {
+    const saved = localStorage.getItem('cybershield_completed');
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+            completedActivities = new Set(parsed);
+        }
+    }
+} catch (e) {
+    console.error("Error loading progress", e);
+}
+
 let currentActivity = null;
 let currentStep = 0;
 let currentScore = 0;
@@ -473,6 +524,15 @@ function setupEventListeners() {
         if (currentActivity) startActivity(currentActivity);
     });
     document.getElementById('logoHome').addEventListener('click', showDashboard);
+    document.getElementById('btnResetProgress').addEventListener('click', () => {
+        if (confirm('¿Estás seguro de que quieres resetear todo tu progreso? Esta acción no se puede deshacer.')) {
+            completedActivities.clear();
+            try {
+                localStorage.removeItem('cybershield_completed');
+            } catch (e) {}
+            renderDashboard();
+        }
+    });
 }
 
 // ========== DASHBOARD ==========
@@ -547,6 +607,9 @@ function showResults(score, total, activityId) {
 
     if (passed) {
         completedActivities.add(activityId);
+        try {
+            localStorage.setItem('cybershield_completed', JSON.stringify([...completedActivities]));
+        } catch (e) {}
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -574,6 +637,7 @@ function startActivity(activityId) {
         case 'fake-login': renderFakeLoginStep(); break;
         case 'social-engineering': renderScenarioStep(); break;
         case 'vm-cases': renderVMStep(); break;
+        case 'advanced-php-vuln': renderAdvancedVMStep(); break;
         case 'final-quiz': renderQuizStep(); break;
     }
 }
@@ -649,7 +713,7 @@ function handleEmailAnswer(isPhishingSelected, email, isSkip = false) {
     document.getElementById('btnSkipEmail').disabled = true;
 
     const feedback = document.getElementById('emailFeedback');
-    
+
     let msg = '';
     let boxClass = '';
     if (isSkip) {
@@ -731,7 +795,7 @@ function handleUrlAnswer(answeredMalicious, urlData, isSkip = false) {
     document.getElementById('btnSkipUrl').disabled = true;
 
     const feedback = document.getElementById('urlFeedback');
-    
+
     let msg = '';
     let boxClass = '';
     if (isSkip) {
@@ -964,7 +1028,7 @@ function handleLoginAnswer(answeredFake, login, isSkip = false) {
     document.getElementById('btnSkipLogin').disabled = true;
 
     const feedback = document.getElementById('loginFeedback');
-    
+
     let msg = '';
     let boxClass = '';
     if (isSkip) {
@@ -1110,16 +1174,13 @@ function renderVMStep() {
             </div>
             <div class="vm-instruction" style="margin-bottom: 1.5rem;">
                 <p style="color: var(--text-primary); font-size: 1.1rem; line-height: 1.5;">${scenario.instruction}</p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">💻 Escribe el comando directamente en la terminal y presiona Enter.</p>
             </div>
             
             <div class="terminal-container" style="padding: 10px;">
                 <div id="xterm-container" style="height: 350px; width: 100%;"></div>
             </div>
             
-            <div class="vm-actions" style="margin-top: 1.5rem; display: flex; gap: 10px; align-items: center;">
-                <input type="text" id="vmAnswer" placeholder="¿Qué comando usaste?" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: white;">
-                <button class="btn btn-primary" id="btnValidateVM">Verificar</button>
-            </div>
             <div class="quiz-actions" style="margin-top: 1rem; display: flex; gap: 10px; justify-content: center;">
                 <button class="btn btn-secondary" id="btnHintVM">💡 Ver Pista</button>
                 <button class="btn btn-warning" id="btnSkipVM">⏭️ Saltar pregunta</button>
@@ -1138,7 +1199,7 @@ function renderVMStep() {
         fontFamily: '"Courier New", Courier, monospace',
         cursorBlink: true
     });
-    
+
     const fitAddon = new FitAddon.FitAddon();
     currentTerm.loadAddon(fitAddon);
     currentTerm.open(termContainer);
@@ -1153,12 +1214,38 @@ function renderVMStep() {
         currentSocket.emit('terminal.resize', { cols: currentTerm.cols, rows: currentTerm.rows });
     });
 
-    currentSocket.on('terminal.inc', (data) => {
-        currentTerm.write(data);
-    });
+    let answered = false;
+    let ptyBuffer = "";
 
     currentTerm.onData((data) => {
+        if (answered) return;
         currentSocket.emit('terminal.out', data);
+    });
+
+    currentSocket.on('terminal.inc', (data) => {
+        currentTerm.write(data);
+        if (answered) return;
+        
+        ptyBuffer += data;
+        if (ptyBuffer.length > 5000) ptyBuffer = ptyBuffer.slice(-5000);
+        
+        const cleanBuffer = ptyBuffer.replace(/\\x1b\\[[0-9;]*[a-zA-Z]/g, '').toLowerCase();
+        
+        let correct = false;
+        if (scenario.expectedCommand.includes('ping')) {
+            correct = cleanBuffer.includes('bytes of data') || cleanBuffer.includes('bytes from');
+        } else if (scenario.expectedCommand.includes('netstat')) {
+            correct = cleanBuffer.includes('active internet connections');
+        } else if (scenario.expectedCommand.includes('grep')) {
+            correct = cleanBuffer.includes('failed password');
+        }
+
+        if (correct) {
+            answered = true;
+            setTimeout(() => {
+                handleVMAnswer(false, scenario, true);
+            }, 1000);
+        }
     });
 
     window.addEventListener('resize', () => {
@@ -1166,11 +1253,6 @@ function renderVMStep() {
         if (currentSocket) {
             currentSocket.emit('terminal.resize', { cols: currentTerm.cols, rows: currentTerm.rows });
         }
-    });
-
-    // Validation
-    document.getElementById('btnValidateVM').addEventListener('click', () => {
-        handleVMAnswer(false, scenario);
     });
 
     document.getElementById('btnHintVM').addEventListener('click', () => {
@@ -1185,17 +1267,13 @@ function renderVMStep() {
     });
 
     document.getElementById('btnSkipVM').addEventListener('click', () => {
-        handleVMAnswer(true, scenario);
+        answered = true;
+        handleVMAnswer(true, scenario, false);
     });
 }
 
-function handleVMAnswer(isSkip, scenario) {
-    const answerInput = document.getElementById('vmAnswer');
-    const answer = answerInput.value.trim().toLowerCase();
+function handleVMAnswer(isSkip, scenario, isCorrect) {
     const feedback = document.getElementById('vmFeedback');
-    
-    // Very basic validation: Check if expected command is in the answer
-    const correct = answer.includes(scenario.expectedCommand.toLowerCase().split(' ')[0]);
 
     if (isSkip) {
         feedback.innerHTML = `
@@ -1205,16 +1283,14 @@ function handleVMAnswer(isSkip, scenario) {
             </div>
             <button class="btn btn-primary btn-next" id="btnNextVM" style="margin-top:1rem;">Siguiente escenario →</button>
         `;
-        document.getElementById('btnValidateVM').disabled = true;
         document.getElementById('btnHintVM').disabled = true;
         document.getElementById('btnSkipVM').disabled = true;
-        answerInput.disabled = true;
-        
+
         document.getElementById('btnNextVM').addEventListener('click', () => {
             currentStep++;
             renderVMStep();
         });
-    } else if (correct) {
+    } else if (isCorrect) {
         currentScore++;
         feedback.innerHTML = `
             <div class="feedback-box success">
@@ -1222,21 +1298,167 @@ function handleVMAnswer(isSkip, scenario) {
             </div>
             <button class="btn btn-primary btn-next" id="btnNextVM" style="margin-top:1rem;">Siguiente escenario →</button>
         `;
-        document.getElementById('btnValidateVM').disabled = true;
         document.getElementById('btnHintVM').disabled = true;
         document.getElementById('btnSkipVM').disabled = true;
-        answerInput.disabled = true;
 
         document.getElementById('btnNextVM').addEventListener('click', () => {
             currentStep++;
             renderVMStep();
         });
-    } else {
-        feedback.innerHTML = `
-            <div class="feedback-box error">
-                Comando incorrecto o incompleto. Inténtalo de nuevo.
+    }
+}
+
+// ========== ADVANCED VM TERMINAL CASES ==========
+function renderAdvancedVMStep() {
+    if (currentStep >= ADVANCED_VM_SCENARIOS.length) {
+        if (currentSocket) currentSocket.disconnect();
+        showResults(currentScore, ADVANCED_VM_SCENARIOS.length, 'advanced-php-vuln');
+        return;
+    }
+
+    const scenario = ADVANCED_VM_SCENARIOS[currentStep];
+    totalQuestions = ADVANCED_VM_SCENARIOS.length;
+
+    activityBody.innerHTML = `
+        <div class="vm-container">
+            <div class="email-toolbar" style="margin: -2rem -2rem 1.5rem; padding: 12px 20px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--bg-card); border-bottom: 1px solid var(--border-glass);">
+                <span class="email-counter">Hacking Avanzado ${currentStep + 1} de ${ADVANCED_VM_SCENARIOS.length}</span>
             </div>
+            <div class="vm-instruction" style="margin-bottom: 1.5rem;">
+                <p style="color: var(--text-primary); font-size: 1.1rem; line-height: 1.5;">${scenario.instruction}</p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">💻 Escribe el comando directamente en la terminal y presiona Enter.</p>
+            </div>
+            
+            <div class="terminal-container" style="padding: 10px;">
+                <div id="xterm-container" style="height: 350px; width: 100%;"></div>
+            </div>
+            
+            <div class="quiz-actions" style="margin-top: 1rem; display: flex; gap: 10px; justify-content: center;">
+                <button class="btn btn-secondary" id="btnHintAdvancedVM">💡 Ver Pista</button>
+                <button class="btn btn-warning" id="btnSkipAdvancedVM">⏭️ Saltar pregunta</button>
+            </div>
+            <div id="vmAdvancedFeedback" style="margin-top: 1rem;"></div>
+        </div>
+    `;
+
+    // Initialize xterm.js
+    const termContainer = document.getElementById('xterm-container');
+    currentTerm = new Terminal({
+        theme: {
+            background: '#0f0f15',
+            foreground: '#ef233c' // Different color for advanced hacking
+        },
+        fontFamily: '"Courier New", Courier, monospace',
+        cursorBlink: true
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    currentTerm.loadAddon(fitAddon);
+    currentTerm.open(termContainer);
+    fitAddon.fit();
+
+    // Connect WebSocket
+    if (currentSocket) currentSocket.disconnect();
+    currentSocket = io();
+
+    currentSocket.on('connect', () => {
+        currentTerm.write('\\r\\n*** Conectado al Entorno de Hacking Web ***\\r\\n');
+        currentSocket.emit('terminal.resize', { cols: currentTerm.cols, rows: currentTerm.rows });
+    });
+
+    let answered = false;
+    let ptyBuffer = "";
+
+    currentTerm.onData((data) => {
+        if (answered) return;
+        currentSocket.emit('terminal.out', data);
+    });
+
+    currentSocket.on('terminal.inc', (data) => {
+        currentTerm.write(data);
+        if (answered) return;
+        
+        ptyBuffer += data;
+        if (ptyBuffer.length > 10000) ptyBuffer = ptyBuffer.slice(-10000);
+        
+        const cleanBuffer = ptyBuffer.replace(/\\x1b\\[[0-9;]*[a-zA-Z]/g, '').toLowerCase();
+        
+        let correct = false;
+        if (scenario.expectedCommand.includes('-d')) {
+             correct = cleanBuffer.includes('uid=') && cleanBuffer.includes('gid=');
+        } else if (scenario.expectedCommand.includes('%20')) {
+             correct = cleanBuffer.includes('found user: guest') && cleanBuffer.includes('found user: admin');
+        } else if (scenario.expectedCommand.includes('secret.txt')) {
+             correct = cleanBuffer.includes('this is a secret file');
+        } else {
+             correct = cleanBuffer.includes('found user: admin') && !cleanBuffer.includes('found user: guest');
+        }
+
+        if (correct) {
+            answered = true;
+            setTimeout(() => {
+                handleAdvancedVMAnswer(false, scenario, true);
+            }, 1000);
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        fitAddon.fit();
+        if (currentSocket) {
+            currentSocket.emit('terminal.resize', { cols: currentTerm.cols, rows: currentTerm.rows });
+        }
+    });
+
+    document.getElementById('btnHintAdvancedVM').addEventListener('click', () => {
+        const feedback = document.getElementById('vmAdvancedFeedback');
+        if (!feedback.innerHTML.includes('Siguiente')) {
+            feedback.innerHTML = `
+                <div class="feedback-box info">
+                    💡 <strong>Pista:</strong> ${scenario.hint}
+                </div>
+            `;
+        }
+    });
+
+    document.getElementById('btnSkipAdvancedVM').addEventListener('click', () => {
+        answered = true;
+        handleAdvancedVMAnswer(true, scenario, false);
+    });
+}
+
+function handleAdvancedVMAnswer(isSkip, scenario, isCorrect) {
+    const feedback = document.getElementById('vmAdvancedFeedback');
+
+    if (isSkip) {
+        feedback.innerHTML = `
+            <div class="feedback-box warning">
+                ⏭️ <strong>Saltado.</strong> El comando esperado era: <code>${scenario.expectedCommand}</code><br>
+                ${scenario.explanation}
+            </div>
+            <button class="btn btn-primary btn-next" id="btnNextAdvancedVM" style="margin-top:1rem;">Siguiente escenario →</button>
         `;
+        document.getElementById('btnHintAdvancedVM').disabled = true;
+        document.getElementById('btnSkipAdvancedVM').disabled = true;
+
+        document.getElementById('btnNextAdvancedVM').addEventListener('click', () => {
+            currentStep++;
+            renderAdvancedVMStep();
+        });
+    } else if (isCorrect) {
+        currentScore++;
+        feedback.innerHTML = `
+            <div class="feedback-box success">
+                ${scenario.explanation}
+            </div>
+            <button class="btn btn-primary btn-next" id="btnNextAdvancedVM" style="margin-top:1rem;">Siguiente escenario →</button>
+        `;
+        document.getElementById('btnHintAdvancedVM').disabled = true;
+        document.getElementById('btnSkipAdvancedVM').disabled = true;
+
+        document.getElementById('btnNextAdvancedVM').addEventListener('click', () => {
+            currentStep++;
+            renderAdvancedVMStep();
+        });
     }
 }
 
@@ -1321,10 +1543,10 @@ function handleQuizAnswer(selectedIdx, question, isSkip = false) {
     if (btnSkip) btnSkip.disabled = true;
 
     const feedback = document.getElementById('quizFeedback');
-    
+
     let msg = '';
     let boxClass = '';
-    
+
     if (isSkip) {
         msg = `⏭️ <strong>Pregunta saltada.</strong><br>La respuesta correcta era: <strong>${question.options[question.correct]}</strong>`;
         boxClass = 'warning';

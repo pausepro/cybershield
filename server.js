@@ -24,7 +24,8 @@ io.on('connection', (socket) => {
     
     // We use windows executable if on windows
     const command = 'docker';
-    const args = ['run', '-it', '--rm', 'cybershield-vm', '/bin/sh'];
+    const containerName = `cybershield-vm-${socket.id}`;
+    const args = ['run', '-it', '--rm', '--name', containerName, 'cybershield-vm', '/bin/bash'];
 
     // Spawn the pty process
     let ptyProcess;
@@ -62,6 +63,8 @@ io.on('connection', (socket) => {
             if (ptyProcess) {
                 ptyProcess.kill();
             }
+            // Force remove the docker container to ensure it is destroyed when the terminal is closed
+            spawn('docker', ['rm', '-f', containerName]);
         });
 
     } catch (err) {
